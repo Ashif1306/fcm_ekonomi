@@ -56,15 +56,15 @@ cat("Jumlah kolom:", ncol(df), "\n")
 # Rename kolom agar lebih mudah digunakan
 df <- df %>%
   rename(
-    Wilayah            = `Nama Wilayah`,
-    Provinsi           = Provinsi,
-    IPM                = IPM,
-    Kemiskinan         = `Penduduk Miskin`,
-    Pengangguran       = `tingkat pengangguran`,
-    PDRB               = pdrb,
-    Kepadatan          = `Kepadatan Penduduk (orang/km2)`,
-    RLS                = RLS,
-    AHH                = AHH
+    Wilayah      = `Nama Wilayah`,
+    Provinsi     = Provinsi,
+    IPM          = IPM,
+    Kemiskinan   = `Penduduk Miskin`,
+    Pengangguran = `tingkat pengangguran`,
+    PDRB         = pdrb,
+    Kepadatan    = `Kepadatan Penduduk (orang/km2)`,
+    RLS          = RLS,
+    AHH          = AHH
   )
 
 # Konversi kolom numerik (tangani nilai '-' sebagai NA)
@@ -74,23 +74,43 @@ for (col in variabel) {
   df[[col]] <- suppressWarnings(as.numeric(df[[col]]))
 }
 
+# =============================================================================
+# 4. STATISTIK DESKRIPTIF (DATA AWAL — sebelum hapus missing value)
+# =============================================================================
+
+cat("\n===== STATISTIK DESKRIPTIF (DATA AWAL — 514 kabupaten/kota) =====\n")
+
+stat_desc <- data.frame(
+  Variabel = variabel,
+  Min      = sapply(df[, variabel], function(x) round(min(x, na.rm = TRUE), 2)),
+  Mean     = sapply(df[, variabel], function(x) round(mean(x, na.rm = TRUE), 2)),
+  Median   = sapply(df[, variabel], function(x) round(median(x, na.rm = TRUE), 2)),
+  Max      = sapply(df[, variabel], function(x) round(max(x, na.rm = TRUE), 2)),
+  Std.Dev  = sapply(df[, variabel], function(x) round(sd(x, na.rm = TRUE), 2))
+)
+
+print(stat_desc)
+
+# =============================================================================
+# 5. PENANGANAN MISSING VALUE
+# =============================================================================
+
 # Cek missing value
 cat("\n===== CEK MISSING VALUE =====\n")
 print(colSums(is.na(df)))
 
 # Hapus baris dengan missing value
 df_clean <- df %>% drop_na(all_of(variabel))
-cat("\nJumlah data setelah hapus missing value:", nrow(df_clean), "baris\n")
+cat("\nJumlah data awal          :", nrow(df), "kabupaten/kota\n")
+cat("Jumlah data dihapus        :", nrow(df) - nrow(df_clean), "kabupaten/kota\n")
+cat("Jumlah data setelah bersih :", nrow(df_clean), "kabupaten/kota\n")
+
+# Tampilkan 5 data pertama setelah bersih
+cat("\n===== 5 DATA PERTAMA (SETELAH BERSIH) =====\n")
+print(head(df_clean[, c("Wilayah", "Provinsi", variabel)], 5))
 
 # =============================================================================
-# 4. STATISTIK DESKRIPTIF
-# =============================================================================
-
-cat("\n===== STATISTIK DESKRIPTIF =====\n")
-print(summary(df_clean[, variabel]))
-
-# =============================================================================
-# 5. NORMALISASI MIN-MAX
+# 6. NORMALISASI MIN-MAX
 # =============================================================================
 
 # Fungsi normalisasi Min-Max
@@ -102,11 +122,16 @@ min_max_norm <- function(x) {
 X_norm <- as.data.frame(lapply(df_clean[, variabel], min_max_norm))
 rownames(X_norm) <- df_clean$Wilayah
 
-cat("\n===== DATA SETELAH NORMALISASI (6 baris pertama) =====\n")
-print(head(X_norm))
+# Tampilkan 5 baris pertama hasil normalisasi dengan nama wilayah
+cat("\n===== DATA SETELAH NORMALISASI (5 BARIS PERTAMA) =====\n")
+hasil_norm_tampil <- cbind(
+  Wilayah = df_clean$Wilayah[1:5],
+  round(X_norm[1:5, ], 3)
+)
+print(hasil_norm_tampil)
 
 # =============================================================================
-# 6. PENENTUAN JUMLAH CLUSTER OPTIMAL — ELBOW METHOD
+# 7. PENENTUAN JUMLAH CLUSTER OPTIMAL — ELBOW METHOD
 # =============================================================================
 
 cat("\n===== ELBOW METHOD (c = 2 hingga 8) =====\n")
@@ -116,16 +141,13 @@ J_values <- c()
 
 for (c in 2:8) {
   hasil_fcm <- fcm(X_norm, centers = c, m = 2, nstart = 1, iter.max = 100)
-  J_val <- hasil_fcm$func.val  # <-- GANTI dari obj.func ke func.val
-  J_values <- c(J_values, J_val)
+  J_val     <- hasil_fcm$func.val
+  J_values  <- c(J_values, J_val)
   cat(sprintf("c = %d | Fungsi Objektif (J) = %.4f\n", c, J_val))
 }
 
 # Tabel hasil elbow
-df_elbow <- data.frame(
-  c       = 2:8,
-  J       = J_values
-)
+df_elbow <- data.frame(c = 2:8, J = J_values)
 
 # Visualisasi Elbow Method
 plot_elbow <- ggplot(df_elbow, aes(x = c, y = J)) +
@@ -146,8 +168,8 @@ plot_elbow <- ggplot(df_elbow, aes(x = c, y = J)) +
   ) +
   theme_minimal(base_size = 13) +
   theme(
-    plot.title    = element_text(face = "bold"),
-    plot.subtitle = element_text(color = "gray50"),
+    plot.title       = element_text(face = "bold"),
+    plot.subtitle    = element_text(color = "gray50"),
     panel.grid.minor = element_blank()
   )
 
@@ -156,7 +178,7 @@ ggsave("plot_elbow.png", plot_elbow, width = 8, height = 5, dpi = 150)
 cat("\nGrafik elbow disimpan: plot_elbow.png\n")
 
 # =============================================================================
-# 7. CLUSTERING FCM DENGAN c = 3
+# 8. CLUSTERING FCM DENGAN c = 3
 # =============================================================================
 
 cat("\n===== CLUSTERING FCM (c = 3) =====\n")
@@ -173,39 +195,38 @@ cat("\n--- Matriks Keanggotaan U (6 baris pertama) ---\n")
 print(round(head(hasil_fcm3$u), 4))
 
 # =============================================================================
-# 8. PENENTUAN KEANGGOTAAN AKHIR DAN PELABELAN EKONOMI
+# 9. PENENTUAN KEANGGOTAAN AKHIR DAN PELABELAN EKONOMI
 # =============================================================================
 
 # Dapatkan keanggotaan awal dari FCM
 cluster_awal <- hasil_fcm3$cluster
 
-# Terapkan pengurutan berdasarkan IPM untuk menentukan tingkat ekonomi
-# (Cluster dengan rata-rata IPM terendah = 1, tertinggi = 3)
-rata_ipm <- sapply(1:3, function(i) mean(df_clean$IPM[cluster_awal == i], na.rm = TRUE))
-urutan_cluster <- order(rata_ipm) 
+# Urutkan cluster berdasarkan rata-rata IPM
+# Cluster dengan IPM terendah = Ekonomi Rendah (1)
+# Cluster dengan IPM tertinggi = Ekonomi Tinggi (3)
+rata_ipm       <- sapply(1:3, function(i) mean(df_clean$IPM[cluster_awal == i], na.rm = TRUE))
+urutan_cluster <- order(rata_ipm)
 
-# mapping_baru: index adalah cluster lama, valuenya adalah cluster baru (1, 2, 3)
+# Mapping cluster lama ke cluster baru
 mapping_baru <- integer(3)
-mapping_baru[urutan_cluster[1]] <- 1 # Ekonomi Rendah
-mapping_baru[urutan_cluster[2]] <- 2 # Ekonomi Sedang
-mapping_baru[urutan_cluster[3]] <- 3 # Ekonomi Tinggi
+mapping_baru[urutan_cluster[1]] <- 1  # Ekonomi Rendah
+mapping_baru[urutan_cluster[2]] <- 2  # Ekonomi Sedang
+mapping_baru[urutan_cluster[3]] <- 3  # Ekonomi Tinggi
 
-# Sesuaikan matriks centroid agar urutannya pas
+# Sesuaikan centroid dan membership ke urutan baru
 centroid_baru <- hasil_fcm3$v[urutan_cluster, ]
-
-# Sesuaikan vektor cluster dan matriks membership ke urutan baru
-cluster_baru <- mapping_baru[cluster_awal]
-u_baru <- hasil_fcm3$u[, urutan_cluster]
+cluster_baru  <- mapping_baru[cluster_awal]
+u_baru        <- hasil_fcm3$u[, urutan_cluster]
 
 # Gabungkan ke dataframe
 label_ekonomi <- c("1 (Ekonomi Rendah)", "2 (Ekonomi Sedang)", "3 (Ekonomi Tinggi)")
 
 df_hasil <- df_clean %>%
   mutate(
-    Cluster       = factor(cluster_baru, levels = 1:3, labels = label_ekonomi),
-    Member_C1     = round(u_baru[, 1], 4),
-    Member_C2     = round(u_baru[, 2], 4),
-    Member_C3     = round(u_baru[, 3], 4)
+    Cluster   = factor(cluster_baru, levels = 1:3, labels = label_ekonomi),
+    Member_C1 = round(u_baru[, 1], 4),
+    Member_C2 = round(u_baru[, 2], 4),
+    Member_C3 = round(u_baru[, 3], 4)
   )
 
 # Distribusi kabupaten per cluster
@@ -213,7 +234,7 @@ cat("\n===== DISTRIBUSI KABUPATEN PER CLUSTER =====\n")
 print(table(df_hasil$Cluster))
 
 # =============================================================================
-# 9. ANALISIS KARAKTERISTIK CLUSTER
+# 10. ANALISIS KARAKTERISTIK CLUSTER
 # =============================================================================
 
 cat("\n===== RATA-RATA VARIABEL PER CLUSTER =====\n")
@@ -234,7 +255,7 @@ df_karakteristik <- df_hasil %>%
 print(df_karakteristik)
 
 # =============================================================================
-# 10. VISUALISASI HASIL CLUSTERING
+# 11. VISUALISASI HASIL CLUSTERING
 # =============================================================================
 
 # Warna untuk setiap cluster
@@ -257,10 +278,10 @@ plot_boxplot <- ggplot(df_long, aes(x = Cluster, y = Nilai, fill = Cluster)) +
   ) +
   theme_minimal(base_size = 11) +
   theme(
-    plot.title    = element_text(face = "bold"),
+    plot.title      = element_text(face = "bold"),
     legend.position = "none",
-    strip.text    = element_text(face = "bold"),
-    axis.text.x   = element_text(angle = 15, hjust = 1)
+    strip.text      = element_text(face = "bold"),
+    axis.text.x     = element_text(angle = 15, hjust = 1)
   )
 
 print(plot_boxplot)
@@ -268,10 +289,9 @@ ggsave("plot_boxplot.png", plot_boxplot, width = 12, height = 7, dpi = 150)
 cat("Grafik boxplot disimpan: plot_boxplot.png\n")
 
 # --- (b) Heatmap Centroid ---
-# Normalisasi centroid untuk visualisasi
 centroid_df <- as.data.frame(centroid_baru)
 colnames(centroid_df) <- variabel
-centroid_df$Cluster <- label_ekonomi
+centroid_df$Cluster   <- label_ekonomi
 
 centroid_long <- centroid_df %>%
   pivot_longer(cols = all_of(variabel), names_to = "Variabel", values_to = "Nilai")
@@ -294,9 +314,9 @@ plot_heatmap <- ggplot(centroid_long, aes(x = Variabel, y = Cluster, fill = Nila
   ) +
   theme_minimal(base_size = 12) +
   theme(
-    plot.title   = element_text(face = "bold"),
-    axis.text.x  = element_text(angle = 30, hjust = 1),
-    panel.grid   = element_blank()
+    plot.title  = element_text(face = "bold"),
+    axis.text.x = element_text(angle = 30, hjust = 1),
+    panel.grid  = element_blank()
   )
 
 print(plot_heatmap)
@@ -315,14 +335,17 @@ plot_scatter <- ggplot(df_hasil, aes(x = IPM, y = Kemiskinan, color = Cluster)) 
     color    = "Kategori Cluster"
   ) +
   theme_minimal(base_size = 12) +
-  theme(plot.title = element_text(face = "bold"), legend.position = "bottom")
+  theme(
+    plot.title      = element_text(face = "bold"),
+    legend.position = "bottom"
+  )
 
 print(plot_scatter)
 ggsave("plot_scatter.png", plot_scatter, width = 8, height = 6, dpi = 150)
 cat("Grafik scatter disimpan: plot_scatter.png\n")
 
 # =============================================================================
-# 11. EKSPOR HASIL DATA
+# 12. EKSPOR HASIL DATA
 # =============================================================================
 
 # Ekspor Data Hasil Clustering Final
@@ -334,7 +357,6 @@ write_csv(df_karakteristik, "karakteristik_cluster.csv")
 cat("Karakteristik cluster disimpan: karakteristik_cluster.csv\n")
 
 # Ekspor Data Hasil Normalisasi Min-Max
-# Untuk `X_norm`, kita perlu memasukkan kembali kolom 'Wilayah' dari row.names
 df_norm_export <- X_norm
 df_norm_export$Wilayah <- rownames(X_norm)
 df_norm_export <- df_norm_export %>% select(Wilayah, everything())
