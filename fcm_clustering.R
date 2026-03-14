@@ -259,7 +259,11 @@ print(df_karakteristik)
 # =============================================================================
 
 # Warna untuk setiap cluster
-warna_cluster <- setNames(c("#E74C3C", "#2ECC71", "#3498DB"), label_ekonomi)
+# SESUDAH
+warna_cluster <- setNames(
+  c("#E74C3C", "#F39C12", "#2ECC71"),
+  label_ekonomi
+)
 
 # --- (a) Boxplot per Variabel per Cluster ---
 df_long <- df_hasil %>%
